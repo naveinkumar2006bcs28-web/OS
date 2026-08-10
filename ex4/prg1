@@ -1,0 +1,401 @@
+#include <stdio.h>
+#include <limits.h>
+
+#define MAX 20
+
+struct Job {
+    int no, at, bt, pr, wt, tat, rem;
+};
+
+struct Job a[MAX];
+int n;
+
+void gantt(int id[], int st[], int en[], int c)
+{
+    int i;
+    printf("\nGantt Chart:\n|");
+
+    for(i = 0; i < c; i++)
+        printf(id[i] == 0 ? " IDLE |" : " P%d |", id[i]);
+
+    printf("\n%d", st[0]);
+
+    for(i = 0; i < c; i++)
+        printf("   %d", en[i]);
+
+    printf("\n");
+}
+
+void result(struct Job x[])
+{
+    int i;
+    float w = 0, t = 0;
+
+    printf("\nProcess\tAT\tBT\tWT\tTAT\n");
+
+    for(i = 0; i < n; i++) {
+        w += x[i].wt;
+        t += x[i].tat;
+
+        printf("P%d\t%d\t%d\t%d\t%d\n",
+               x[i].no, x[i].at, x[i].bt,
+               x[i].wt, x[i].tat);
+    }
+
+    printf("\nAverage Waiting Time = %.2f", w / n);
+    printf("\nAverage Turnaround Time = %.2f\n", t / n);
+}
+
+/* FCFS */
+void fcfs()
+{
+    struct Job x[MAX], temp;
+    int i, j, time = 0;
+    int id[MAX], st[MAX], en[MAX];
+
+    for(i = 0; i < n; i++)
+        x[i] = a[i];
+
+    for(i = 0; i < n - 1; i++)
+        for(j = 0; j < n - i - 1; j++)
+            if(x[j].at > x[j + 1].at) {
+                temp = x[j];
+                x[j] = x[j + 1];
+                x[j + 1] = temp;
+            }
+
+    for(i = 0; i < n; i++) {
+        if(time < x[i].at)
+            time = x[i].at;
+
+        id[i] = x[i].no;
+        st[i] = time;
+
+        x[i].wt = time - x[i].at;
+        time += x[i].bt;
+        x[i].tat = time - x[i].at;
+
+        en[i] = time;
+    }
+
+    gantt(id, st, en, n);
+    result(x);
+}
+
+/* SJF */
+void sjf()
+{
+    struct Job x[MAX];
+    int done[MAX] = {0};
+    int id[MAX], st[MAX], en[MAX];
+    int i, k, time = 0, count = 0, c = 0;
+
+    for(i = 0; i < n; i++)
+        x[i] = a[i];
+
+    while(count < n) {
+        k = -1;
+
+        for(i = 0; i < n; i++)
+            if(!done[i] && x[i].at <= time &&
+               (k == -1 || x[i].bt < x[k].bt))
+                k = i;
+
+        if(k == -1) {
+            time++;
+            continue;
+        }
+
+        id[c] = x[k].no;
+        st[c] = time;
+
+        x[k].wt = time - x[k].at;
+        time += x[k].bt;
+        x[k].tat = time - x[k].at;
+
+        en[c++] = time;
+
+        done[k] = 1;
+        count++;
+    }
+
+    gantt(id, st, en, c);
+    result(x);
+}
+
+/* SRTF */
+void srtf()
+{
+    struct Job x[MAX];
+    int id[2000], st[2000], en[2000];
+    int i, k, time = 0, done = 0, c = 0;
+
+    for(i = 0; i < n; i++) {
+        x[i] = a[i];
+        x[i].rem = x[i].bt;
+    }
+
+    while(done < n) {
+        k = -1;
+
+        for(i = 0; i < n; i++)
+            if(x[i].at <= time && x[i].rem > 0 &&
+               (k == -1 || x[i].rem < x[k].rem))
+                k = i;
+
+        if(k == -1) {
+            time++;
+            continue;
+        }
+
+        if(c > 0 && id[c - 1] == x[k].no)
+            en[c - 1] = time + 1;
+        else {
+            id[c] = x[k].no;
+            st[c] = time;
+            en[c++] = time + 1;
+        }
+
+        x[k].rem--;
+        time++;
+
+        if(x[k].rem == 0) {
+            x[k].tat = time - x[k].at;
+            x[k].wt = x[k].tat - x[k].bt;
+            done++;
+        }
+    }
+
+    gantt(id, st, en, c);
+    result(x);
+}
+
+/* Non-Preemptive Priority */
+void priority()
+{
+    struct Job x[MAX];
+    int done[MAX] = {0};
+    int id[MAX], st[MAX], en[MAX];
+    int i, k, time = 0, count = 0, c = 0;
+
+    for(i = 0; i < n; i++)
+        x[i] = a[i];
+
+    while(count < n) {
+        k = -1;
+
+        for(i = 0; i < n; i++)
+            if(!done[i] && x[i].at <= time &&
+               (k == -1 || x[i].pr < x[k].pr))
+                k = i;
+
+        if(k == -1) {
+            time++;
+            continue;
+        }
+
+        id[c] = x[k].no;
+        st[c] = time;
+
+        x[k].wt = time - x[k].at;
+        time += x[k].bt;
+        x[k].tat = time - x[k].at;
+
+        en[c++] = time;
+
+        done[k] = 1;
+        count++;
+    }
+
+    gantt(id, st, en, c);
+
+    printf("\nProcess\tAT\tBT\tPR\tWT\tTAT\n");
+
+    for(i = 0; i < n; i++)
+        printf("P%d\t%d\t%d\t%d\t%d\t%d\n",
+               x[i].no, x[i].at, x[i].bt,
+               x[i].pr, x[i].wt, x[i].tat);
+}
+
+/* Preemptive Priority */
+void prePriority()
+{
+    struct Job x[MAX];
+    int id[2000], st[2000], en[2000];
+    int i, k, time = 0, done = 0, c = 0;
+
+    for(i = 0; i < n; i++) {
+        x[i] = a[i];
+        x[i].rem = x[i].bt;
+    }
+
+    while(done < n) {
+        k = -1;
+
+        for(i = 0; i < n; i++)
+            if(x[i].at <= time && x[i].rem > 0 &&
+               (k == -1 || x[i].pr < x[k].pr))
+                k = i;
+
+        if(k == -1) {
+            time++;
+            continue;
+        }
+
+        if(c > 0 && id[c - 1] == x[k].no)
+            en[c - 1] = time + 1;
+        else {
+            id[c] = x[k].no;
+            st[c] = time;
+            en[c++] = time + 1;
+        }
+
+        x[k].rem--;
+        time++;
+
+        if(x[k].rem == 0) {
+            x[k].tat = time - x[k].at;
+            x[k].wt = x[k].tat - x[k].bt;
+            done++;
+        }
+    }
+
+    gantt(id, st, en, c);
+
+    printf("\nProcess\tAT\tBT\tPR\tWT\tTAT\n");
+
+    for(i = 0; i < n; i++)
+        printf("P%d\t%d\t%d\t%d\t%d\t%d\n",
+               x[i].no, x[i].at, x[i].bt,
+               x[i].pr, x[i].wt, x[i].tat);
+}
+
+/* Round Robin */
+void rr()
+{
+    struct Job x[MAX];
+    int q[2000], front = 0, rear = 0;
+    int id[2000], st[2000], en[2000];
+    int added[MAX] = {0}, done[MAX] = {0};
+    int i, k, time = 0, count = 0, c = 0, tq;
+
+    for(i = 0; i < n; i++) {
+        x[i] = a[i];
+        x[i].rem = x[i].bt;
+    }
+
+    printf("Enter Time Quantum: ");
+    scanf("%d", &tq);
+
+    if(tq <= 0) {
+        printf("Invalid Time Quantum\n");
+        return;
+    }
+
+    while(count < n) {
+
+        for(i = 0; i < n; i++)
+            if(!added[i] && x[i].at <= time) {
+                q[rear++] = i;
+                added[i] = 1;
+            }
+
+        if(front == rear) {
+            time++;
+            continue;
+        }
+
+        k = q[front++];
+
+        id[c] = x[k].no;
+        st[c] = time;
+
+        if(x[k].rem > tq) {
+            time += tq;
+            x[k].rem -= tq;
+        }
+        else {
+            time += x[k].rem;
+            x[k].rem = 0;
+        }
+
+        en[c++] = time;
+
+        for(i = 0; i < n; i++)
+            if(!added[i] && x[i].at <= time) {
+                q[rear++] = i;
+                added[i] = 1;
+            }
+
+        if(x[k].rem > 0)
+            q[rear++] = k;
+        else {
+            done[k] = 1;
+            count++;
+
+            x[k].tat = time - x[k].at;
+            x[k].wt = x[k].tat - x[k].bt;
+        }
+    }
+
+    gantt(id, st, en, c);
+    result(x);
+}
+
+int main()
+{
+    int i, choice, priorityGiven = 0;
+
+    printf("Enter number of processes: ");
+    scanf("%d", &n);
+
+    if(n < 1 || n > MAX) {
+        printf("Invalid number of processes\n");
+        return 0;
+    }
+
+    for(i = 0; i < n; i++) {
+        a[i].no = i + 1;
+
+        printf("Enter Arrival Time of P%d: ", i + 1);
+        scanf("%d", &a[i].at);
+
+        printf("Enter Burst Time of P%d: ", i + 1);
+        scanf("%d", &a[i].bt);
+    }
+
+    do {
+        printf("\n--- CPU Scheduling ---\n");
+        printf("1. FCFS\n");
+        printf("2. SJF\n");
+        printf("3. SRTF\n");
+        printf("4. Priority (Non-Preemptive)\n");
+        printf("5. Priority (Preemptive)\n");
+        printf("6. Round Robin\n");
+        printf("7. Exit\n");
+        printf("Enter choice: ");
+        scanf("%d", &choice);
+
+        if((choice == 4 || choice == 5) && !priorityGiven) {
+            for(i = 0; i < n; i++) {
+                printf("Enter Priority of P%d: ", i + 1);
+                scanf("%d", &a[i].pr);
+            }
+            priorityGiven = 1;
+        }
+
+        switch(choice) {
+            case 1: fcfs(); break;
+            case 2: sjf(); break;
+            case 3: srtf(); break;
+            case 4: priority(); break;
+            case 5: prePriority(); break;
+            case 6: rr(); break;
+            case 7: printf("Exiting...\n"); break;
+            default: printf("Invalid Choice\n");
+        }
+
+    } while(choice != 7);
+
+    return 0;
+}
