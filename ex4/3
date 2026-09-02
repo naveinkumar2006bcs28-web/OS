@@ -1,0 +1,409 @@
+Script started on Wednesday 02 September 2026 02:45:40 PM IST
+
+[24bcs053@mepcolinux ex3]$cat parchild.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <unistd.h>
+#include <sys/wait.h>
+
+int main(){
+   int shmid, *buf;
+   int i, num, size = 10;
+   
+   shmid = shmget(4777, sizeof(int) * size, IPC_CREAT | 0666);
+   printf("==========PARENTCHILD PROGRAM=========");
+   
+   if(shmid == -1){
+      perror("shmget");
+      return 1;
+   }
+   
+   buf = (int *)shmat(shmid, NULL, 0);
+   
+   if(buf == (void *)-1){
+      perror("shmat");
+      return 1;
+   }
+   
+   pid_t pid = fork();
+   
+   if(pid < 0){
+      perror("fork");
+      return 1;
+   }
+   
+   if(pid == 0){
+
+      printf("Producer Child Process\n");
+      
+      for(i = 0; i < size; i++){
+	 printf("Enter data %d : ", i + 1);
+	 scanf("%d", &num);
+	 buf[i] = num;
+      }
+      
+      shmdt(buf);
+   }
+   
+   else{
+
+      wait(NULL);
+
+      printf("Consumer Parent Process\n");
+      
+      for(i = 0; i < size; i++){
+	 printf("data[%d] = %d\n", i + 1, buf[i]);
+      }
+      
+      shmdt(buf);
+      shmctl(shmid, IPC_RMID, NULL);
+
+    }
+
+    return 0;
+}
+[24bcs053@mepcolinux ex3]$./parent
+==========PARENTCHILD PROGRAM=========Producer Child Process
+Enter data 1 : 4
+Enter data 2 : 5
+Enter data 3 : 6
+Enter data 4 : 7
+Enter data 5 : 8
+Enter data 6 : 9
+Enter data 7 : 2
+Enter data 8 : 3
+Enter data 9 : 10
+Enter data 10 : 11
+==========PARENTCHILD PROGRAM=========Consumer Parent Process
+data[1] = 4
+data[2] = 5
+data[3] = 6
+data[4] = 7
+data[5] = 8
+data[6] = 9
+data[7] = 2
+data[8] = 3
+data[9] = 10
+data[10] = 11
+[24bcs053@mepcolinux ex3]$cat producer.c
+#include<stdio.h>
+#include<stdlib.h>
+#include<sys/types.h>
+#include<sys/ipc.h>
+#include<sys/shm.h>
+#include<unistd.h>
+#include<sys/wait.h>
+int main(){
+   int shmid,num,*buf,i;
+   int size = 10;
+   int in = 0;
+
+   shmid = shmget(2462,sizeof(int)*size,IPC_CREAT|00600);
+
+   if(shmid == -1){
+      perror("shmget");
+      return 1;
+   }
+
+   buf = (int*)shmat(shmid,NULL,0);
+
+   if(buf == (int*)-1){
+      perror("shmat");
+      return 1;
+   }
+   else{
+      for(i = 0; i<size; i++){
+	 printf("Enter Data %d:",i+1);
+	 scanf("%d",&num);
+	 buf[in] = num;
+	 in = (in + 1) % size;
+      }
+   }
+   shmdt(buf);
+   return 0;
+}
+[24bcs053@mepcolinux ex3]$./producer
+Enter Data 1:7
+Enter Data 2:8
+Enter Data 3:9
+Enter Data 4:10
+Enter Data 5:11
+Enter Data 6:1
+Enter Data 7:2
+Enter Data 8:3
+Enter Data 9:4
+Enter Data 10:54
+[24bcs053@mepcolinux ex3]$cat consumer.c
+#include<stdio.h>
+#include<stdlib.h>
+#include<sys/types.h>
+#include<sys/ipc.h>
+#include<sys/shm.h>
+#include<unistd.h>
+#include<sys/wait.h>
+
+int main(){
+   int shmid,num,*buf,i;
+   int size = 10;
+   int out = 0;
+
+   shmid = shmget(2462,sizeof(int)*size,IPC_CREAT|00600);
+
+   if(shmid == -1){
+      perror("shmget");
+      return 1;
+   }
+
+   buf = (int*)shmat(shmid,NULL,0);
+
+   if(buf == (int*)-1){
+      perror("shmat");
+      return 0;
+   }
+   else{
+      printf("Consumed Data\n");
+      for(i = 0; i<size; i++){
+	 num = buf[out];
+	 printf("%d ",num);
+	 out = (out + 1) % size;
+      }
+      shmdt(buf);
+      shmctl(shmid,IPC_RMID,NULL);
+   }
+return 0;
+}
+[24bcs053@mepcolinux ex3]$./consumer
+Consumed Data
+7 8 9 10 11 1 2 3 4 54
+[24bcs053@mepcolinux ex3]$cat producerbw.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <unistd.h>
+int main() {
+    int shmid, num, *buf;
+    int c;
+    int size = 10;    
+    shmid = shmget(2463,sizeof(int)*(size + 4),IPC_CREAT|00600);
+    printf("=========producer starts producing=======\n");
+    if(shmid == -1){
+       perror("shmget");
+       return 1;
+    }
+    
+    buf = (int*)shmat(shmid, NULL, 0);
+    if(buf == (int*)-1) {
+       perror("shmat");
+       return 1;
+    }
+    
+    if(buf[13] != 1){
+        buf[10] = 0;
+        buf[11] = 0;
+    }
+    buf[12] = 1;
+    
+    while(1){
+       
+       while (((buf[10] + 1) % size) == buf[11]);
+       
+       printf("Enter Data: ");
+       scanf("%d", &num);
+       
+       buf[buf[10]] = num;
+       buf[10] = (buf[10] + 1) % size;
+
+       printf("type 1 to produce or 0 to terminate:");
+       scanf("%d",&c);
+       if(c != 1){
+	  break;
+       }
+    }
+    
+    buf[12] = 0;
+    
+    if(buf[13] == 0){
+       shmdt(buf);
+       shmctl(shmid, IPC_RMID, NULL);
+    } 
+    else{
+       shmdt(buf);
+    }
+    
+    return 0;
+}
+[24bcs053@mepcolinux ex3]$./producerbw
+=========producer starts producing=======
+Enter Data: 5
+type 1 to produce or 0 to terminate:1
+Enter Data: 6
+type 1 to produce or 0 to terminate:1
+Enter Data: 2
+type 1 to produce or 0 to terminate:0
+[24bcs053@mepcolinux ex3]$cat consumerbw.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <unistd.h>
+
+int main() {
+    int shmid, num, *buf, i, c;
+    int size = 10;    
+    shmid = shmget(2463,sizeof(int)*(size + 4),IPC_CREAT|00600);
+    printf("========consumer starts==========\n");
+    if(shmid == -1){
+       perror("shmget");
+       return 1;
+    }
+    
+    buf = (int*)shmat(shmid, NULL, 0);
+    if(buf == (int*)-1){
+       perror("shmat");
+       return 1;
+    }
+
+    if(buf[12] != 1){
+       buf[10] = 0;
+       buf[11] = 0;
+    }
+    
+    buf[13] = 1;
+    
+    while(1){
+       while (buf[11] == buf[10]);
+       
+       num = buf[buf[11]];
+       printf("Consumed Data: %d\n", num);
+       
+       buf[11] = (buf[11] + 1) % size;
+       
+       printf("type 1 for consume 0 to exit:");
+       scanf("%d",&c);
+       if(c != 1){
+	  break;
+       }
+    }
+    
+    buf[13] = 0;
+    
+    if(buf[12] == 0){
+       shmdt(buf);
+       shmctl(shmid, IPC_RMID, NULL);
+    } 
+    else{
+       shmdt(buf);
+    }
+    
+    return 0;
+}
+[24bcs053@mepcolinux ex3]$./consumerbw
+========consumer starts==========
+5
+enter 1 to consume:1
+6
+enter 1 to consume:1
+2
+enter 1 to consume:0
+[24bcs053@mepcolinux ex3]$cat msgq.c
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
+
+struct msg_buffer {
+    long msg_type;     
+    int data;    
+}      
+int main() {
+    key_t key;
+    int msqid;
+    pid_t pid;
+    key = ftok("progfile", 65);
+    if (key == -1) {
+        perror("ftok failed");
+        exit(1);
+    }
+
+
+    msqid = msgget(key, 0666 | IPC_CREAT);
+    if (msqid == -1) {
+        perror("msgget failed");
+        exit(1);
+    }
+
+
+    pid = fork();
+
+    if (pid < 0) {
+        perror("Fork failed");
+        exit(1);
+    } 
+    else if (pid == 0) {
+
+        struct msg_buffer message;
+        
+        for (int i = 1; i <= 5; i++) {
+
+            if (msgrcv(msqid, &message, sizeof(message.data), 1, 0) == -1) {
+                perror("msgrcv failed");
+                exit(1);
+            }
+            printf("[Consumer] Consumed item: %d\n", message.data);
+            sleep(2);
+        }
+        exit(0);
+    } 
+    else {
+      
+        struct msg_buffer message;
+        message.msg_type = 1;
+
+        for (int i = 1; i <= 5; i++) {
+            message.data = i * 10; // Produce an item (e.g., 10, 20, 30...)
+            printf("[Producer] Produced item: %d\n", message.data);
+
+            
+            if (msgsnd(msqid, &message, sizeof(message.data), 0) == -1) {
+                perror("msgsnd failed");
+                exit(1);
+            }
+            sleep(1);
+        }
+
+         wait(NULL);
+
+ 
+        msgctl(msqid, IPC_RMID, NULL);
+        printf("Message queue destroyed. Program finished.\n");
+    }
+
+    return 0;
+}
+[24bcs053@mepcolinux ex3]$./msg
+[Producer] Produced item: 7
+[Consumer] Consumed item: 14
+[Producer] Produced item: 7
+[Producer] Produced item: 21
+[Consumer] Consumed item: 14
+[Producer] Produced item: 28
+[Producer] Produced item: 35
+[Consumer] Consumed item: 21
+[Consumer] Consumed item: 28
+[Consumer] Consumed item: 35
+Message queue destroyed. Program finished.
+[24bcs053@mepcolinux ex3]$exit
+exit
+
+Script done on Wednesday 02 September 2026 02:50:13 PM IST
