@@ -1,0 +1,45 @@
+#include <stdio.h>
+#include <unistd.h>
+#include <string.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+
+int main() {
+   int fd[2];
+   pid_t p;
+   char write_msg[] = "Hello from Parent Process";
+   char read_msg[100];
+
+   if(pipe(fd)==-1) {
+      perror("Pipe creation failed");
+      return 1;
+   }
+
+   p=fork();
+   if(p<0) {
+      perror("Fork failed");
+      return 1;
+   }
+
+
+
+   if(p==0) {
+      close(fd[1]);
+
+      int bytes_read = read(fd[0], read_msg, sizeof(read_msg)-1);
+
+      if(bytes_read>0) {
+         read_msg[bytes_read]='\0';
+         printf("Child received: %s\n",read_msg);
+      }
+      close(fd[0]);
+   }
+   else {
+      close(fd[0]);
+      printf("Parent sending :%s\n",write_msg);
+      write(fd[1],write_msg,strlen(write_msg)+1);
+      close(fd[1]);
+      wait(NULL);
+   }
+   return 0;
+}
