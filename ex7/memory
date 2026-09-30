@@ -1,0 +1,180 @@
+#include <stdio.h>
+#include <stdbool.h>
+
+#define MAX 20
+
+typedef struct {
+    int id;            // Original 1-based block number
+    int original_size; // Initial capacity
+    int current_size;  // Remaining free space
+} Block;
+
+// Function to print results and calculate fragmentation metrics
+void displayAndCalculateFragmentation(Block blocks[], int blockCount, int processes[], int processCount, int allocation[]) {
+    int total_internal_frag = 0;
+    int total_external_frag = 0;
+    bool has_unallocated = false;
+
+    printf("\nProcess No.\tProcess Size\tBlock No.\tInternal Frag\n");
+    printf("-------------------------------------------------------------\n");
+    for (int i = 0; i < processCount; i++) {
+        printf("  P%-10d\t  %-12d\t", i + 1, processes[i]);
+        if (allocation[i] != -1) {
+            int allocated_block_idx = allocation[i];
+            int internal_frag = blocks[allocated_block_idx].current_size; // Remaining space in that block
+            printf("  Block %-4d\t  %-12d\n", blocks[allocated_block_idx].id, internal_frag);
+        } else {
+            printf("  Not Allocated\t  -\n");
+            has_unallocated = true;
+        }
+    }
+
+    // 1. Calculate Internal Fragmentation (Sum of unused space in allocated blocks)
+    // 2. Calculate Unallocated Block Memory (Sum of sizes of blocks that were never touched)
+    int totally_unallocated_block_memory = 0;
+
+    for (int j = 0; j < blockCount; j++) {
+        if (blocks[j].current_size < blocks[j].original_size) {
+            // Block was allocated: remaining space is internal fragmentation
+            total_internal_frag += blocks[j].current_size;
+        } else {
+            // Block was NEVER allocated (100% free)
+            totally_unallocated_block_memory += blocks[j].original_size;
+        }
+    }
+
+    // External fragmentation = Sum of completely unallocated block sizes IF a process fails to allocate
+    if (has_unallocated) {
+        total_external_frag = totally_unallocated_block_memory;
+    }
+
+    printf("-------------------------------------------------------------\n");
+    printf("Total Internal Fragmentation : %d\n", total_internal_frag);
+    printf("Total External Fragmentation : %d\n", total_external_frag);
+}
+
+// Function to sort partition indices based on current_size
+// mode: 1 = Static/Natural (First-Fit), 2 = Ascending (Best-Fit), 3 = Descending (Worst-Fit)
+void sortPartitionIndices(Block blocks[], int blockCount, int index[], int mode) {
+    for (int i = 0; i < blockCount; i++) {
+        index[i] = i;
+    }
+
+    if (mode == 1) return; // First-Fit uses natural order
+
+    // Bubble sort index array using current_size struct field
+    for (int i = 0; i < blockCount - 1; i++) {
+        for (int j = 0; j < blockCount - i - 1; j++) {
+            bool swapCondition = (mode == 2) ? (blocks[index[j]].current_size > blocks[index[j + 1]].current_size)  // Best-Fit
+                                             : (blocks[index[j]].current_size < blocks[index[j + 1]].current_size); // Worst-Fit
+            if (swapCondition) {
+                int temp = index[j];
+                index[j] = index[j + 1];
+                index[j + 1] = temp;
+            }
+        }
+    }
+}
+
+// SHARED TRAVERSAL & ALLOCATION ENGINE
+void allocateMemoryByTraversal(Block originalBlocks[], int blockCount, int processes[], int processCount, int mode) {
+    Block blocks[MAX];
+    int allocation[MAX], index[MAX];
+
+    // Copy original struct array to a local copy for state isolation
+    for (int i = 0; i < blockCount; i++) {
+        blocks[i] = originalBlocks[i];
+        blocks[i].current_size = originalBlocks[i].original_size; // Reset available space
+    }
+    for (int i = 0; i < processCount; i++) {
+        allocation[i] = -1;
+    }
+
+    // Process-by-process allocation using index-guided traversal
+    for (int i = 0; i < processCount; i++) {
+        sortPartitionIndices(blocks, blockCount, index, mode);
+
+        for (int j = 0; j < blockCount; j++) {
+            int blkIdx = index[j];
+            if (blocks[blkIdx].current_size >= processes[i]) {
+                allocation[i] = blkIdx;
+                blocks[blkIdx].current_size -= processes[i];
+                break;
+            }
+        }
+    }
+
+    displayAndCalculateFragmentation(blocks, blockCount, processes, processCount, allocation);
+}
+
+// 1. FIRST-FIT ALGORITHM
+void firstFit(Block originalBlocks[], int blockCount, int processes[], int processCount) {
+    allocateMemoryByTraversal(originalBlocks, blockCount, processes, processCount, 1);
+}
+
+// 2. BEST-FIT ALGORITHM
+void bestFit(Block originalBlocks[], int blockCount, int processes[], int processCount) {
+    allocateMemoryByTraversal(originalBlocks, blockCount, processes, processCount, 2);
+}
+
+// 3. WORST-FIT ALGORITHM
+void worstFit(Block originalBlocks[], int blockCount, int processes[], int processCount) {
+    allocateMemoryByTraversal(originalBlocks, blockCount, processes, processCount, 3);
+}
+
+int main() {
+    int blockCount, processCount, choice;
+    Block blocks[MAX];
+    int processes[MAX];
+
+    printf("Enter number of memory blocks: ");
+    scanf("%d", &blockCount);
+    printf("Enter size of each memory block:\n");
+    for (int i = 0; i < blockCount; i++) {
+        blocks[i].id = i + 1;
+        printf("Block %d: ", i + 1);
+        scanf("%d", &blocks[i].original_size);
+        blocks[i].current_size = blocks[i].original_size;
+    }
+
+    printf("\nEnter number of processes: ");
+    scanf("%d", &processCount);
+    printf("Enter memory size needed for each process:\n");
+    for (int i = 0; i < processCount; i++) {
+        printf("Process P%d: ", i + 1);
+        scanf("%d", &processes[i]);
+    }
+
+    while (1) {
+        printf("\n=========================================\n");
+        printf("          MEMORY ALLOCATION MENU         \n");
+        printf("=========================================\n");
+        printf("1. First-Fit Allocation\n");
+        printf("2. Best-Fit Allocation\n");
+        printf("3. Worst-Fit Allocation\n");
+        printf("4. Exit\n");
+        printf("Enter your choice: ");
+        scanf("%d", &choice);
+
+        switch (choice) {
+            case 1:
+                printf("\n>>> FIRST-FIT ALLOCATION <<<");
+                firstFit(blocks, blockCount, processes, processCount);
+                break;
+            case 2:
+                printf("\n>>> BEST-FIT ALLOCATION <<<");
+                bestFit(blocks, blockCount, processes, processCount);
+                break;
+            case 3:
+                printf("\n>>> WORST-FIT ALLOCATION <<<");
+                worstFit(blocks, blockCount, processes, processCount);
+                break;
+            case 4:
+                return 0;
+            default:
+                printf("Invalid choice! Try again.\n");
+        }
+    }
+
+    return 0;
+}
